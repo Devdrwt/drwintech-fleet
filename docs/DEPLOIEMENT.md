@@ -58,6 +58,13 @@ sed -i "s|^DJANGO_SUPERUSER_PASSWORD=.*|DJANGO_SUPERUSER_PASSWORD=$(openssl rand
 docker compose -f docker-compose.prod.yml build      # ou: ... pull
 docker compose -f docker-compose.prod.yml up -d
 
+# 3bis. Web Push (VAPID) — génère la paire de clés (privée montée dans api+celery)
+openssl ecparam -genkey -name prime256v1 -noout -out infra/vapid_private.pem
+chown 1000:1000 infra/vapid_private.pem && chmod 600 infra/vapid_private.pem   # lisible par appuser (uid 1000)
+PUB=$(openssl ec -in infra/vapid_private.pem -pubout -outform DER 2>/dev/null | tail -c 65 | base64 | tr -d '\n' | tr '+/' '-_' | tr -d '=')
+sed -i "s|^VAPID_PUBLIC_KEY=.*|VAPID_PUBLIC_KEY=$PUB|" .env
+docker compose -f docker-compose.prod.yml up -d api celery-worker celery-beat
+
 # 4. nginx + TLS
 cp infra/nginx/fleet.drwintech.com.conf      /etc/nginx/conf.d/
 cp infra/nginx/api-fleet.drwintech.com.conf  /etc/nginx/conf.d/
